@@ -1,0 +1,16 @@
+# Vercel は `main.py` を既定のエントリに含めないため、[project.scripts] で FastAPI の `app` を指定する。
+# 参照: https://vercel.com/docs/frameworks/backend/fastapi
+[project]
+name = "english-training-api"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = ["uvicorn[standard]>=0.30.0"]
+
+[project.scripts]
+app = "main:app"
