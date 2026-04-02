@@ -1,0 +1,29 @@
+# OS / editor
+.DS_Store
+*.swp
+*.log
+
+# Secrets（例はコミット可）
+**/.env
+!**/.env.example
+
+# Flutter（app）
+app/.dart_tool/
+app/build/
+app/.flutter-plugins-dependencies
+app/.pub-cache/
+app/pubspec.lock.bak
+
+# Python
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# Vercel / deploy
+.vercel
+
+# スクレイパー仮想環境（tools 直下）
+tools/.venv/
