@@ -32,9 +32,7 @@
    - ビルド時に `--dart-define=CORRECTION_API_BASE_URL=...` へ渡る
 5. **Deploy**
 
-[`app/vercel.json`](app/vercel.json) の内容:
-
-- **buildCommand**: 安定版 Flutter を clone → `flutter precache --web` → `pub get` → `build web --release`
+[`app/vercel.json`](app/vercel.json) の **buildCommand** は 256 文字制限のため、実処理は [`app/scripts/vercel_build.sh`](app/scripts/vercel_build.sh) にあります（Flutter clone → `precache --web` → `build web --release`）。
 - **outputDirectory**: `build/web`
 - **routes**: 先に静的ファイルを配信し、それ以外を `index.html` へ（SPA のリロード対策）
 
