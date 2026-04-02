@@ -87,8 +87,10 @@ class BlogmaeDeckScreen extends StatefulWidget {
 
 class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
   final stt.SpeechToText _speech = stt.SpeechToText();
+  /// 部分認識のコールバックは非常に高頻度。`setState` で Scaffold 全体を毎回再構築するとカクつくため、
+  /// 文字起こし表示だけこの Notifier で局所再描画する。
+  final ValueNotifier<String> _transcriptNotifier = ValueNotifier<String>('');
   late int _index;
-  String _transcript = '';
   bool _speechReady = false;
   String? _speechError;
   bool _listening = false;
@@ -101,6 +103,12 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
     final maxI = widget.entries.isEmpty ? 0 : widget.entries.length - 1;
     _index = widget.initialIndex.clamp(0, maxI);
     _initSpeech();
+  }
+
+  @override
+  void dispose() {
+    _transcriptNotifier.dispose();
+    super.dispose();
   }
 
   Future<void> _initSpeech() async {
@@ -135,12 +143,12 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
     }
     setState(() {
       _speechError = null;
-      _transcript = '';
     });
+    _transcriptNotifier.value = '';
     await _speech.listen(
       onResult: (result) {
         if (mounted) {
-          setState(() => _transcript = result.recognizedWords);
+          _transcriptNotifier.value = result.recognizedWords;
         }
       },
       listenFor: const Duration(minutes: 2),
@@ -189,7 +197,7 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
       slideFromRightRoute<void>(
         SpeechEvaluationScreen(
           entry: _current,
-          userTranscript: _transcript.trim(),
+          userTranscript: _transcriptNotifier.value.trim(),
           onGoToNextQuestion: _goToNextFromEvaluation,
         ),
       ),
@@ -291,16 +299,22 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
                       constraints: const BoxConstraints(minHeight: 88, maxHeight: 140),
                       child: SingleChildScrollView(
                         padding: const EdgeInsets.all(12),
-                        child: Text(
-                          _transcript.isEmpty
-                              ? '（英語で話すとここに文字起こしが表示されます）'
-                              : _transcript,
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                fontStyle: _transcript.isEmpty ? FontStyle.italic : FontStyle.normal,
-                                color: _transcript.isEmpty
-                                    ? colorScheme.onSurfaceVariant
-                                    : colorScheme.onSurface,
-                              ),
+                        child: ValueListenableBuilder<String>(
+                          valueListenable: _transcriptNotifier,
+                          builder: (context, transcript, _) {
+                            final empty = transcript.isEmpty;
+                            return Text(
+                              empty
+                                  ? '（英語で話すとここに文字起こしが表示されます）'
+                                  : transcript,
+                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    fontStyle: empty ? FontStyle.italic : FontStyle.normal,
+                                    color: empty
+                                        ? colorScheme.onSurfaceVariant
+                                        : colorScheme.onSurface,
+                                  ),
+                            );
+                          },
                         ),
                       ),
                     ),
