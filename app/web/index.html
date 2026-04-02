@@ -18,7 +18,13 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <!-- モバイル Safari のレイアウト・慣性スクロールに必須（無いと拡大表示＆カクつきの原因になりやすい） -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="A new Flutter project.">
+
+  <!-- Google Fonts（google_fonts）の DNS/TLS を先に張る → モバイルでの初回描画を短縮 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -31,6 +37,10 @@
 
   <title>english_training</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { -webkit-text-size-adjust: 100%; }
+  </style>
 </head>
 <body>
   <!--
