@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../services/blogmae_basic_loader.dart';
+import '../services/learning_items_loader.dart';
+import '../utils/env_config.dart';
 import 'blogmae_deck_screen.dart';
 
 /// 学習開始後、BlogMAE 教材を選ぶ。
@@ -19,6 +20,24 @@ class BlogmaeCourseSelectScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         children: [
+          if (!EnvConfig.hasSupabase)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Material(
+                color: colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Supabase が未設定です。app/.env に SUPABASE_URL と '
+                    'SUPABASE_ANON_KEY を書き、--dart-define-from-file=.env で起動してください。',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onErrorContainer,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           Text(
             'BlogMAE 瞬間英作トレーニング',
             style: textTheme.titleMedium?.copyWith(
@@ -29,31 +48,31 @@ class BlogmaeCourseSelectScreen extends StatelessWidget {
           _CourseTile(
             title: 'BlogMAE 基礎編',
             subtitle: '文法単元別の短文ドリル（pronunciation1）',
-            assetPath: BlogmaeBasicLoader.basicAssetPath,
+            courseKey: LearningItemsLoader.courseBasic,
           ),
           const SizedBox(height: 12),
           _CourseTile(
             title: 'BlogMAE 初級編',
             subtitle: '初級の総合トレーニング（pronunciation2）',
-            assetPath: BlogmaeBasicLoader.beginnerAssetPath,
+            courseKey: LearningItemsLoader.courseBeginner,
           ),
           const SizedBox(height: 12),
           _CourseTile(
             title: 'BlogMAE 分詞・関係代名詞編',
             subtitle: '分詞・関係詞・知覚動詞など（1-2）',
-            assetPath: BlogmaeBasicLoader.participleAssetPath,
+            courseKey: LearningItemsLoader.courseParticiple,
           ),
           const SizedBox(height: 12),
           _CourseTile(
             title: 'BlogMAE 中級編',
             subtitle: '口語的・やや長めの文（pronunciation3）',
-            assetPath: BlogmaeBasicLoader.intermediateAssetPath,
+            courseKey: LearningItemsLoader.courseIntermediate,
           ),
           const SizedBox(height: 12),
           _CourseTile(
             title: 'BlogMAE 上級編',
             subtitle: 'より複雑な表現（pronunciation4）',
-            assetPath: BlogmaeBasicLoader.advancedAssetPath,
+            courseKey: LearningItemsLoader.courseAdvanced,
           ),
         ],
       ),
@@ -65,12 +84,12 @@ class _CourseTile extends StatelessWidget {
   const _CourseTile({
     required this.title,
     required this.subtitle,
-    required this.assetPath,
+    required this.courseKey,
   });
 
   final String title;
   final String subtitle;
-  final String assetPath;
+  final String courseKey;
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +104,7 @@ class _CourseTile extends StatelessWidget {
           Navigator.of(context).push<void>(
             MaterialPageRoute<void>(
               builder: (_) => BlogmaeDeckFlowScreen(
-                assetPath: assetPath,
+                courseKey: courseKey,
                 courseTitle: title,
               ),
             ),

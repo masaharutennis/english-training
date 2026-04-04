@@ -4,12 +4,12 @@
 
 本アプリは **Flutter Web** 上で動作する個人用の**瞬間英作文（発話）**練習アプリである。
 
-- 教材データは **CSV**（`blogmae_basic.csv` … ブログ前ベーシック）をアプリアセットとして読み込む。
-- **カード式**で CSV 順に問題を進める（一覧から選ばない）。
+- 教材データは **Supabase** の `public.learning_items`（`course_key` でコース別）を **anon** で読み込む。
+- **カード式**で `lesson_number` 昇順に問題を進める（一覧から選ばない）。
 - 画面上に**日本語お題**と**模範英文**を表示し、ユーザーは**英語で発話**。ブラウザの **STT（en-US）** でテキスト化しリアルタイム表示する。
 - **自前 API**（`api/main.py`）が OpenAI を呼び、**100 点満点のスコア**と**短い日本語アドバイス**だけを返す（全文添削ではなく「意味がどれだけ言えているか」の評価。模範英文との完全一致は不要）。
 
-ログイン・DB・サーバー永続化は不要（個人利用想定）。
+ログイン・スコアの永続化は不要（個人利用想定）。教材はホスト済み DB から取得する。
 
 ### 1.1 画面遷移
 
@@ -24,8 +24,8 @@
 
 - 対象: **Flutter Web**（マイク・STT は **Chrome 推奨**、`localhost` / HTTPS）
 - 評価 API: `POST /v1/composition/evaluate_speech`（`api/main.py`）
-- OpenAI キーは **サーバー環境変数のみ**；Flutter は `CORRECTION_API_BASE_URL` のみ（`api/README.md`）
-- データ: UTF-8 CSV
+- OpenAI キーは **サーバー環境変数のみ**；Flutter は `CORRECTION_API_BASE_URL` と Supabase の `SUPABASE_URL` / `SUPABASE_ANON_KEY`（`api/README.md`）
+- データ: Supabase（Postgres）／シード再生成元は `tools/scraping/output/*.csv`
 
 ---
 
@@ -35,7 +35,7 @@
 2. マイクで英語を話す（認識結果が随時表示）  
 3. 話し終えたらマイクを止め、**解答を確認**  
 4. スコア（0–100）と短いアドバイスを読む  
-5. **次の問題へ**で CSV の次の行へ  
+5. **次の問題へ**でリストの次の問題へ  
 
 ---
 
@@ -51,16 +51,18 @@
 
 ---
 
-## 5. CSV データ仕様（ブログ前ベーシック）
+## 5. 教材データ（lessons + learning_items）
 
-| 列名 | 説明 |
-|------|------|
-| id | 問題 ID |
-| grammar | 文法・単元 |
-| english | 模範英文 |
-| japanese | お題（日本語） |
+**lessons** … コース（全 5 件: basic / beginner / participle / intermediate / advanced）。`course_key` で一意。
 
-アセット: `assets/data/blogmae_basic.csv`
+**learning_items** … `lesson_id` でコースに紐づく。`item_number` がコース内の通し（元 CSV の id）。
+
+| テーブル | 主な列 |
+|----------|--------|
+| lessons | `course_key`, `title`, `sort_order` |
+| learning_items | `lesson_id`, `item_number`, `grammar`, `english`, `japanese` |
+
+シード SQL 生成: `tools/generate_learning_seed.py`（入力 CSV は `tools/scraping/output/`）
 
 ---
 

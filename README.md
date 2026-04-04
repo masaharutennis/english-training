@@ -6,7 +6,7 @@
 
 | ディレクトリ | 内容 |
 |-------------|------|
-| [`app/`](app/) | Flutter Web（教材 CSV・STT・評価画面） |
+| [`app/`](app/) | Flutter Web（Supabase 教材・STT・評価画面） |
 | [`api/`](api/) | FastAPI … `POST /v1/composition/evaluate_speech` など |
 | [`tools/scraping/`](tools/scraping/) | BlogMAE 記事から CSV を生成するスクレイパー |
 | [`docs/`](docs/) | 仕様メモ |
@@ -14,7 +14,7 @@
 ## ローカル開発（概要）
 
 - **API**: `api/` で `cp .env.example .env` のうえ `./start.sh`（`OPENAI_API_KEY` 必須）
-- **Flutter**: `app/` で `cp .env.example .env`（`CORRECTION_API_BASE_URL` のみ）し、`flutter run -d chrome --dart-define-from-file=.env`
+- **Flutter**: `app/` で `cp .env.example .env`（`CORRECTION_API_BASE_URL` と `SUPABASE_URL` / `SUPABASE_ANON_KEY`）し、`flutter run -d chrome --dart-define-from-file=.env`
 
 詳細は [`api/README.md`](api/README.md) を参照。
 
@@ -29,7 +29,8 @@
 3. **Framework Preset** → *Other*（自動検出に任せずとも可。`app/vercel.json` が効く）
 4. **Environment Variables**（Production / Preview どちらにでも）  
    - `CORRECTION_API_BASE_URL` = デプロイ済み API のオリジン（例: `https://your-api.vercel.app`、末尾スラッシュなし）  
-   - ビルド時に `--dart-define=CORRECTION_API_BASE_URL=...` へ渡る
+   - `SUPABASE_URL` / `SUPABASE_ANON_KEY` = Supabase ダッシュボードの Project URL と anon public キー  
+   - ビルド時に `scripts/vercel_build.sh` 経由で `--dart-define` に渡る
 5. **Deploy**
 
 [`app/vercel.json`](app/vercel.json) の **buildCommand** は 256 文字制限のため、実処理は [`app/scripts/vercel_build.sh`](app/scripts/vercel_build.sh) にあります（Flutter clone → `precache --web` → `build web --release`）。
@@ -40,4 +41,4 @@
 
 ## ライセンス・教材
 
-教材データは BlogMAE の公開記事をスクレイプした CSV をアセットに含めています。サイトの利用条件に従ってください。
+教材データは BlogMAE 系の元データを Supabase に保持しています（生成は [`tools/`](tools/) など）。サイトの利用条件に従ってください。

@@ -1,4 +1,4 @@
-/// ブログ前ベーシック CSV（id, grammar, english, japanese）の1行。
+/// 1 問。`id` はコース内の `item_number`（元 CSV の id）。
 class BlogmaeEntry {
   const BlogmaeEntry({
     required this.id,

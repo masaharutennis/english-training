@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/home_screen.dart';
+import 'utils/env_config.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (EnvConfig.hasSupabase) {
+    await Supabase.initialize(
+      url: EnvConfig.supabaseUrlResolved,
+      anonKey: EnvConfig.supabaseAnonKeyResolved,
+    );
+  }
   runApp(const EnglishTrainingApp());
 }
 

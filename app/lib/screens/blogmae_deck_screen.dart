@@ -3,19 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../models/blogmae_entry.dart';
-import '../services/blogmae_basic_loader.dart';
+import '../services/learning_items_loader.dart';
 import '../widgets/slide_page_route.dart';
 import 'speech_evaluation_screen.dart';
 
-/// CSV を順番にカード表示。発話 STT → 解答確認。
+/// Supabase の問題を順にカード表示。英語の入力または発話 STT → 解答確認。
 class BlogmaeDeckFlowScreen extends StatefulWidget {
   const BlogmaeDeckFlowScreen({
     super.key,
-    required this.assetPath,
+    required this.courseKey,
     required this.courseTitle,
   });
 
-  final String assetPath;
+  final String courseKey;
   final String courseTitle;
 
   @override
@@ -28,7 +28,7 @@ class _BlogmaeDeckFlowScreenState extends State<BlogmaeDeckFlowScreen> {
   @override
   void initState() {
     super.initState();
-    _future = BlogmaeBasicLoader.load(widget.assetPath);
+    _future = LearningItemsLoader.loadForCourse(widget.courseKey);
   }
 
   @override
@@ -87,9 +87,8 @@ class BlogmaeDeckScreen extends StatefulWidget {
 
 class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
   final stt.SpeechToText _speech = stt.SpeechToText();
-  /// 部分認識のコールバックは非常に高頻度。`setState` で Scaffold 全体を毎回再構築するとカクつくため、
-  /// 文字起こし表示だけこの Notifier で局所再描画する。
-  final ValueNotifier<String> _transcriptNotifier = ValueNotifier<String>('');
+  /// 発話 STT もキーボード入力も同じフィールドに入れる（部分認識は controller 更新のみで再描画が局所的）。
+  final TextEditingController _answerController = TextEditingController();
   late int _index;
   bool _speechReady = false;
   String? _speechError;
@@ -107,7 +106,7 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
 
   @override
   void dispose() {
-    _transcriptNotifier.dispose();
+    _answerController.dispose();
     super.dispose();
   }
 
@@ -144,12 +143,15 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
     setState(() {
       _speechError = null;
     });
-    _transcriptNotifier.value = '';
+    _answerController.clear();
     await _speech.listen(
       onResult: (result) {
-        if (mounted) {
-          _transcriptNotifier.value = result.recognizedWords;
-        }
+        if (!mounted) return;
+        final t = result.recognizedWords;
+        _answerController.value = TextEditingValue(
+          text: t,
+          selection: TextSelection.collapsed(offset: t.length),
+        );
       },
       listenFor: const Duration(minutes: 2),
       pauseFor: const Duration(seconds: 4),
@@ -197,7 +199,7 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
       slideFromRightRoute<void>(
         SpeechEvaluationScreen(
           entry: _current,
-          userTranscript: _transcriptNotifier.value.trim(),
+          userTranscript: _answerController.text.trim(),
           onGoToNextQuestion: _goToNextFromEvaluation,
         ),
       ),
@@ -296,25 +298,23 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: 88, maxHeight: 140),
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(12),
-                        child: ValueListenableBuilder<String>(
-                          valueListenable: _transcriptNotifier,
-                          builder: (context, transcript, _) {
-                            final empty = transcript.isEmpty;
-                            return Text(
-                              empty
-                                  ? '（英語で話すとここに文字起こしが表示されます）'
-                                  : transcript,
-                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    fontStyle: empty ? FontStyle.italic : FontStyle.normal,
-                                    color: empty
-                                        ? colorScheme.onSurfaceVariant
-                                        : colorScheme.onSurface,
-                                  ),
-                            );
-                          },
+                      constraints: const BoxConstraints(minHeight: 88, maxHeight: 160),
+                      child: TextField(
+                        controller: _answerController,
+                        maxLines: null,
+                        minLines: 3,
+                        keyboardType: TextInputType.multiline,
+                        textCapitalization: TextCapitalization.sentences,
+                        style: Theme.of(context).textTheme.bodyLarge,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          border: InputBorder.none,
+                          hintText: '英語で入力するか、マイクで話してください',
+                          hintStyle: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontStyle: FontStyle.italic,
+                              ),
+                          contentPadding: const EdgeInsets.all(12),
                         ),
                       ),
                     ),
@@ -354,7 +354,7 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
-                        'Chrome 推奨。マイクの許可が必要です。',
+                        '音声を使う場合は Chrome 推奨・マイクの許可が必要です。入力のみでも解答できます。',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: colorScheme.outline,
