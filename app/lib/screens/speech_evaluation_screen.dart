@@ -3,19 +3,19 @@ import 'package:flutter/material.dart';
 import '../models/blogmae_entry.dart';
 import '../models/speech_evaluation_result.dart';
 import '../services/composition_api_client.dart';
+import '../services/learning_progress_service.dart';
+import '../utils/english_answer_diff.dart';
 
-/// 発話の簡易評価（スコア + 短いアドバイス）。
+/// 発話の簡易評価（スコア + 短いアドバイス）。「次へ」で [Navigator.pop] にスコアを返す。
 class SpeechEvaluationScreen extends StatefulWidget {
   const SpeechEvaluationScreen({
     super.key,
     required this.entry,
     required this.userTranscript,
-    required this.onGoToNextQuestion,
   });
 
   final BlogmaeEntry entry;
   final String userTranscript;
-  final void Function(BuildContext context) onGoToNextQuestion;
 
   @override
   State<SpeechEvaluationScreen> createState() => _SpeechEvaluationScreenState();
@@ -77,17 +77,36 @@ class _SpeechEvaluationScreenState extends State<SpeechEvaluationScreen> {
 
           final r = snapshot.data!;
           final colorScheme = Theme.of(context).colorScheme;
+          final baseStyle = Theme.of(context).textTheme.bodyLarge!.copyWith(height: 1.4);
+          final model = widget.entry.english;
+          final user = widget.userTranscript;
 
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
               _block(context, 'お題（日本語）', widget.entry.japanese),
-              _block(
+              _labeledDiffSection(
                 context,
-                'あなたの発話（認識結果）',
-                widget.userTranscript.isEmpty ? '（空）' : widget.userTranscript,
+                label: 'あなたの発話（認識結果）',
+                spans: EnglishAnswerDiff.spansForUser(
+                  model,
+                  user,
+                  baseStyle,
+                  colorScheme.onSurface,
+                ),
+                baseStyle: baseStyle,
               ),
-              _block(context, '模範解答（英文）', widget.entry.english),
+              _labeledDiffSection(
+                context,
+                label: '模範解答（英文）',
+                spans: EnglishAnswerDiff.spansForModel(
+                  model,
+                  user,
+                  baseStyle,
+                  colorScheme.onSurface,
+                ),
+                baseStyle: baseStyle,
+              ),
               const SizedBox(height: 8),
               const Divider(),
               const SizedBox(height: 16),
@@ -121,7 +140,14 @@ class _SpeechEvaluationScreenState extends State<SpeechEvaluationScreen> {
               ],
               const SizedBox(height: 32),
               FilledButton(
-                onPressed: () => widget.onGoToNextQuestion(context),
+                onPressed: () async {
+                  await LearningProgressService.recordAttempt(
+                    learningItemId: widget.entry.learningItemId,
+                    score: r.score.clamp(0, 100),
+                  );
+                  if (!context.mounted) return;
+                  Navigator.of(context).pop(r.score.clamp(0, 100));
+                },
                 child: const Text('次の問題へ'),
               ),
             ],
@@ -148,6 +174,33 @@ class _SpeechEvaluationScreenState extends State<SpeechEvaluationScreen> {
           SelectableText(
             body,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.4),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _labeledDiffSection(
+    BuildContext context, {
+    required String label,
+    required List<TextSpan> spans,
+    required TextStyle baseStyle,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 6),
+          SelectableText.rich(
+            TextSpan(style: baseStyle, children: spans),
           ),
         ],
       ),

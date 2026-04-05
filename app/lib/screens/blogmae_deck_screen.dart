@@ -5,6 +5,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../models/blogmae_entry.dart';
 import '../services/learning_items_loader.dart';
 import '../widgets/slide_page_route.dart';
+import 'session_complete_screen.dart';
 import 'speech_evaluation_screen.dart';
 
 /// Supabase の問題を順にカード表示。英語の入力または発話 STT → 解答確認。
@@ -63,6 +64,7 @@ class _BlogmaeDeckFlowScreenState extends State<BlogmaeDeckFlowScreen> {
         return BlogmaeDeckScreen(
           entries: items,
           courseTitle: widget.courseTitle,
+          quizHint: '${items.length}問（苦手優先のランダム）',
         );
       },
     );
@@ -75,11 +77,13 @@ class BlogmaeDeckScreen extends StatefulWidget {
     required this.entries,
     required this.courseTitle,
     this.initialIndex = 0,
+    this.quizHint,
   });
 
   final List<BlogmaeEntry> entries;
   final String courseTitle;
   final int initialIndex;
+  final String? quizHint;
 
   @override
   State<BlogmaeDeckScreen> createState() => _BlogmaeDeckScreenState();
@@ -89,6 +93,7 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
   final stt.SpeechToText _speech = stt.SpeechToText();
   /// 発話 STT もキーボード入力も同じフィールドに入れる（部分認識は controller 更新のみで再描画が局所的）。
   final TextEditingController _answerController = TextEditingController();
+  final List<int> _sessionScores = <int>[];
   late int _index;
   bool _speechReady = false;
   String? _speechError;
@@ -165,28 +170,6 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
     if (mounted) setState(() => _listening = true);
   }
 
-  void _goToNextFromEvaluation(BuildContext evaluationContext) {
-    final next = _index + 1;
-    if (next < widget.entries.length) {
-      Navigator.of(evaluationContext).pushAndRemoveUntil<void>(
-        slideFromRightRoute<void>(
-          BlogmaeDeckScreen(
-            entries: widget.entries,
-            courseTitle: widget.courseTitle,
-            initialIndex: next,
-          ),
-        ),
-        (route) => route.isFirst,
-      );
-    } else {
-      final messenger = ScaffoldMessenger.of(evaluationContext);
-      Navigator.of(evaluationContext).popUntil((route) => route.isFirst);
-      messenger.showSnackBar(
-        const SnackBar(content: Text('すべての問題を終えました')),
-      );
-    }
-  }
-
   Future<void> _confirmAnswer() async {
     if (_listening) {
       await _speech.stop();
@@ -195,16 +178,38 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
     setState(() => _listening = false);
 
     if (!context.mounted) return;
-    await Navigator.of(context).push<void>(
-      slideFromRightRoute<void>(
+    final score = await Navigator.of(context).push<int?>(
+      slideFromRightRoute<int?>(
         SpeechEvaluationScreen(
           entry: _current,
           userTranscript: _answerController.text.trim(),
-          onGoToNextQuestion: _goToNextFromEvaluation,
         ),
       ),
     );
-    if (!mounted) return;
+    if (!mounted || score == null) return;
+
+    _sessionScores.add(score);
+
+    if (_index + 1 < widget.entries.length) {
+      setState(() {
+        _index++;
+        _answerController.clear();
+      });
+    } else {
+      final avg = _sessionScores.isEmpty
+          ? 0.0
+          : _sessionScores.reduce((a, b) => a + b) / _sessionScores.length;
+      if (!mounted) return;
+      await Navigator.of(context).pushAndRemoveUntil<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => SessionCompleteScreen(
+            courseTitle: widget.courseTitle,
+            sessionAverage: avg,
+          ),
+        ),
+        (route) => route.isFirst,
+      );
+    }
   }
 
   @override
@@ -232,46 +237,75 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              '$n / $total',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+            child: Column(
+              children: [
+                Text(
+                  '$n / $total',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                ),
+                if (widget.quizHint != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.quizHint!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.outline,
+                        ),
                   ),
+                ],
+              ],
             ),
           ),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Card(
-                margin: EdgeInsets.zero,
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          Chip(
-                            label: Text('#${_current.id}'),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          Chip(
-                            label: Text(_current.grammar),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        _current.japanese,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              height: 1.35,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 280),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, anim) {
+                  final slide = Tween<Offset>(
+                    begin: const Offset(0.12, 0),
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic));
+                  return FadeTransition(
+                    opacity: anim,
+                    child: SlideTransition(position: slide, child: child),
+                  );
+                },
+                child: Card(
+                  key: ValueKey<int>(_index),
+                  margin: EdgeInsets.zero,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            Chip(
+                              label: Text('#${_current.id}'),
+                              visualDensity: VisualDensity.compact,
                             ),
-                      ),
-                    ],
+                            Chip(
+                              label: Text(_current.grammar),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          _current.japanese,
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                height: 1.35,
+                              ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

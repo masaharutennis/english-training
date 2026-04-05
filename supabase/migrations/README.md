@@ -2,7 +2,8 @@
 
 | ファイル | 内容 |
 |----------|------|
-| `20260404000000_learning_lessons_and_items.sql` | `lessons`（5コース）と `learning_items`（`lesson_id` + `item_number`）を一括作成。RLS は SELECT のみ anon/authenticated に公開。 |
+| `20260404000000_learning_lessons_and_items.sql` | `lessons`（5コース）と `learning_items`（`lesson_id` + `item_number`）を一括作成。 |
+| `20260408100000_profiles_and_learning_attempts.sql` | `profiles`（`auth.users` と同期）、`learning_item_attempts`（採点履歴）。教材テーブルは **authenticated** のみ SELECT。 |
 
 教材データは `supabase db reset` 後に `config.toml` の `db.seed` で `seeds/learning_items.sql` が流れる。
 
