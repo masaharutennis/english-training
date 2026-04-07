@@ -107,15 +107,8 @@ class _BlogmaeCourseSelectScreenState extends State<BlogmaeCourseSelectScreen> {
     if (mounted) await _refresh();
   }
 
+  /// タイル本体・＞相当は常に練習デッキへ。自作レッスンの編集は [onEdit] のみ。
   Future<void> _onLessonTap(LessonListRow row) async {
-    if (row.isSystem) {
-      await _openSystemOrPublicDeck(row.title, row.courseKey);
-      return;
-    }
-    if (row.isOwner) {
-      await _openUserOwnedEditor(row);
-      return;
-    }
     await _openSystemOrPublicDeck(row.title, row.courseKey);
   }
 
@@ -233,7 +226,7 @@ class _BlogmaeCourseSelectScreenState extends State<BlogmaeCourseSelectScreen> {
                     if (EnvConfig.hasSupabase) ...[
                       const SizedBox(height: 8),
                       Text(
-                        '公式教材はタップで練習開始。自作レッスンは編集画面で問題を追加できます。'
+                        'タップで練習開始。自作レッスンは鉛筆アイコンから編集（問題の追加・変更）です。'
                         '右の円は全問の直近スコアの平均です。',
                         style: textTheme.bodySmall?.copyWith(
                           color: colorScheme.outline,
@@ -262,9 +255,9 @@ class _BlogmaeCourseSelectScreenState extends State<BlogmaeCourseSelectScreen> {
                             subtitle: _subtitleFor(row),
                             showDonut: showDonut,
                             averageScore: averages[row.courseKey] ?? 0,
-                            trailingHint: row.isOwner ? Icons.edit_note_rounded : null,
                             showScoreResetMenu: showDonut,
                             onResetScores: () => _confirmResetScores(row),
+                            onEdit: null,
                             onOpen: () async {
                               await _onLessonTap(row);
                             },
@@ -288,10 +281,13 @@ class _BlogmaeCourseSelectScreenState extends State<BlogmaeCourseSelectScreen> {
                               subtitle: _subtitleFor(row),
                               showDonut: showDonut,
                               averageScore: averages[row.courseKey] ?? 0,
-                              trailingHint:
-                                  row.isOwner ? Icons.edit_note_rounded : null,
                               showScoreResetMenu: showDonut,
                               onResetScores: () => _confirmResetScores(row),
+                              onEdit: row.isOwner
+                                  ? () async {
+                                      await _openUserOwnedEditor(row);
+                                    }
+                                  : null,
                               onOpen: () async {
                                 await _onLessonTap(row);
                               },
@@ -355,9 +351,9 @@ class _CourseTile extends StatelessWidget {
     required this.showDonut,
     required this.averageScore,
     required this.onOpen,
-    this.trailingHint,
     this.showScoreResetMenu = false,
     this.onResetScores,
+    this.onEdit,
   });
 
   final String title;
@@ -365,9 +361,10 @@ class _CourseTile extends StatelessWidget {
   final bool showDonut;
   final double averageScore;
   final Future<void> Function() onOpen;
-  final IconData? trailingHint;
   final bool showScoreResetMenu;
   final Future<void> Function()? onResetScores;
+  /// 自作レッスンのみ。タップで編集画面へ（練習は行の onOpen）。
+  final Future<void> Function()? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -382,10 +379,6 @@ class _CourseTile extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (trailingHint != null) ...[
-              Icon(trailingHint, size: 20, color: colorScheme.outline),
-              const SizedBox(width: 4),
-            ],
             if (showDonut) ...[
               ScoreDonut(score: averageScore),
               const SizedBox(width: 4),
@@ -406,6 +399,14 @@ class _CourseTile extends StatelessWidget {
                     child: Text('スコアをリセット'),
                   ),
                 ],
+              ),
+            if (onEdit != null)
+              IconButton(
+                tooltip: '編集',
+                icon: Icon(Icons.edit_note_rounded, color: colorScheme.primary),
+                onPressed: () async {
+                  await onEdit!();
+                },
               ),
             Icon(Icons.chevron_right_rounded, color: colorScheme.primary),
           ],
