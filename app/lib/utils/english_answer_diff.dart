@@ -254,6 +254,37 @@ class EnglishAnswerDiff {
 
     return spans;
   }
+
+  /// 模範文・ユーザー発話を単語整列し、一致の割合から 0〜100 を **10 点刻み** で返す。
+  ///
+  /// `2 * matched / (modelWords + userWords) * 100` を四捨五入してから 10 刻み（API モードと同様のレンジ）。
+  static int scoreFromWordDiffRoundedTen(String modelEnglish, String userEnglish) {
+    final modelToks = _wordToks(modelEnglish);
+    final userToks = _wordToks(userEnglish);
+    if (modelToks.isEmpty) {
+      return userToks.isEmpty ? 100 : 0;
+    }
+    if (userToks.isEmpty) {
+      return 0;
+    }
+    final km = modelToks.map((t) => t.key).toList();
+    final ku = userToks.map((t) => t.key).toList();
+    final ops = _diffKeys(km, ku);
+    var matched = 0;
+    for (final op in ops) {
+      if (op.kind == _WordDiffKind.equal) {
+        matched += op.count;
+      }
+    }
+    final denom = modelToks.length + userToks.length;
+    final raw = denom == 0 ? 100 : ((200 * matched) / denom).round().clamp(0, 100);
+    return _roundScoreToTen(raw);
+  }
+
+  static int _roundScoreToTen(int score0to100) {
+    final r = (score0to100 / 10).round() * 10;
+    return r.clamp(0, 100);
+  }
 }
 
 enum _WordDiffKind { equal, delete, insert }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../config/speech_evaluation_config.dart';
 import '../models/blogmae_entry.dart';
 import '../models/speech_evaluation_result.dart';
 import '../services/composition_api_client.dart';
@@ -22,25 +23,44 @@ class SpeechEvaluationScreen extends StatefulWidget {
 }
 
 class _SpeechEvaluationScreenState extends State<SpeechEvaluationScreen> {
-  late Future<SpeechEvaluationResult> _future;
+  Future<SpeechEvaluationResult>? _apiFuture;
 
   @override
   void initState() {
     super.initState();
-    _future = CompositionApiClient().evaluateSpeech(
-      entry: widget.entry,
-      userEnglish: widget.userTranscript,
+    if (!kUseLocalWordDiffSpeechEvaluation) {
+      _apiFuture = CompositionApiClient().evaluateSpeech(
+        entry: widget.entry,
+        userEnglish: widget.userTranscript,
+      );
+    }
+  }
+
+  SpeechEvaluationResult _localEvaluation() {
+    final score = EnglishAnswerDiff.scoreFromWordDiffRoundedTen(
+      widget.entry.english,
+      widget.userTranscript,
     );
+    return SpeechEvaluationResult(score: score, advice: '');
   }
 
   @override
   Widget build(BuildContext context) {
+    if (kUseLocalWordDiffSpeechEvaluation) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('解答を確認'),
+        ),
+        body: _evaluationBody(context, _localEvaluation()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('解答を確認'),
       ),
       body: FutureBuilder<SpeechEvaluationResult>(
-        future: _future,
+        future: _apiFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(
@@ -75,85 +95,90 @@ class _SpeechEvaluationScreenState extends State<SpeechEvaluationScreen> {
             );
           }
 
-          final r = snapshot.data!;
-          final colorScheme = Theme.of(context).colorScheme;
-          final baseStyle = Theme.of(context).textTheme.bodyLarge!.copyWith(height: 1.4);
-          final model = widget.entry.english;
-          final user = widget.userTranscript;
-
-          return ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              _block(context, 'お題（日本語）', widget.entry.japanese),
-              _labeledDiffSection(
-                context,
-                label: 'あなたの発話（認識結果）',
-                spans: EnglishAnswerDiff.spansForUser(
-                  model,
-                  user,
-                  baseStyle,
-                  colorScheme.onSurface,
-                ),
-                baseStyle: baseStyle,
-              ),
-              _labeledDiffSection(
-                context,
-                label: '模範解答（英文）',
-                spans: EnglishAnswerDiff.spansForModel(
-                  model,
-                  user,
-                  baseStyle,
-                  colorScheme.onSurface,
-                ),
-                baseStyle: baseStyle,
-              ),
-              const SizedBox(height: 8),
-              const Divider(),
-              const SizedBox(height: 16),
-              Text(
-                'スコア',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${r.score} / 100',
-                style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: colorScheme.primary,
-                    ),
-              ),
-              if (r.advice.isNotEmpty) ...[
-                const SizedBox(height: 20),
-                Text(
-                  'フィードバック',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  r.advice,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.45),
-                ),
-              ],
-              const SizedBox(height: 32),
-              FilledButton(
-                onPressed: () async {
-                  await LearningProgressService.recordAttempt(
-                    learningItemId: widget.entry.learningItemId,
-                    score: r.score.clamp(0, 100),
-                  );
-                  if (!context.mounted) return;
-                  Navigator.of(context).pop(r.score.clamp(0, 100));
-                },
-                child: const Text('次の問題へ'),
-              ),
-            ],
-          );
+          return _evaluationBody(context, snapshot.data!);
         },
       ),
+    );
+  }
+
+  Widget _evaluationBody(BuildContext context, SpeechEvaluationResult r) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final baseStyle = Theme.of(context).textTheme.bodyLarge!.copyWith(height: 1.4);
+    final model = widget.entry.english;
+    final user = widget.userTranscript;
+
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        _block(context, 'お題（日本語）', widget.entry.japanese),
+        _labeledDiffSection(
+          context,
+          label: 'あなたの発話（認識結果）',
+          spans: EnglishAnswerDiff.spansForUser(
+            model,
+            user,
+            baseStyle,
+            colorScheme.onSurface,
+          ),
+          baseStyle: baseStyle,
+        ),
+        _labeledDiffSection(
+          context,
+          label: '模範解答（英文）',
+          spans: EnglishAnswerDiff.spansForModel(
+            model,
+            user,
+            baseStyle,
+            colorScheme.onSurface,
+          ),
+          baseStyle: baseStyle,
+        ),
+        const SizedBox(height: 8),
+        const Divider(),
+        const SizedBox(height: 16),
+        Text(
+          kUseLocalWordDiffSpeechEvaluation
+              ? 'スコア（ローカル・単語一致・10点刻み）'
+              : 'スコア',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '${r.score} / 100',
+          style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: colorScheme.primary,
+              ),
+        ),
+        if (r.advice.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          Text(
+            'フィードバック',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            r.advice,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.45),
+          ),
+        ],
+        const SizedBox(height: 32),
+        FilledButton(
+          onPressed: () async {
+            await LearningProgressService.recordAttempt(
+              learningItemId: widget.entry.learningItemId,
+              score: r.score.clamp(0, 100),
+            );
+            if (!context.mounted) return;
+            Navigator.of(context).pop(r.score.clamp(0, 100));
+          },
+          child: const Text('次の問題へ'),
+        ),
+      ],
     );
   }
 
