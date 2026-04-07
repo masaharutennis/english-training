@@ -118,6 +118,16 @@ class UserLessonsService {
         .eq('lesson_kind', 'user');
   }
 
+  /// 自作レッスンごと削除（`learning_items` は CASCADE、採点履歴も紐づく問題経由で消える）。
+  static Future<void> deleteUserLesson(String courseKey) async {
+    _ensureSupabase();
+    await Supabase.instance.client
+        .from('lessons')
+        .delete()
+        .eq('course_key', courseKey)
+        .eq('lesson_kind', 'user');
+  }
+
   static Future<int> _resolveLessonId(String courseKey) async {
     final rows = await Supabase.instance.client
         .from('lessons')

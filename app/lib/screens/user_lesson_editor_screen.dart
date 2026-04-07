@@ -189,6 +189,47 @@ class _UserLessonEditorScreenState extends State<UserLessonEditorScreen> {
     if (mounted) await _reload();
   }
 
+  Future<void> _confirmDeleteLesson() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('レッスンを削除'),
+        content: Text(
+          '「${widget.title}」と含まれる全ての問題・履歴を削除します。元に戻せません。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('削除する'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await UserLessonsService.deleteUserLesson(widget.courseKey);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('レッスンを削除しました')),
+      );
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('削除に失敗: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -213,6 +254,25 @@ class _UserLessonEditorScreenState extends State<UserLessonEditorScreen> {
               }
               await _openPractice();
             },
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded),
+            tooltip: 'その他',
+            onSelected: (value) {
+              if (value == 'delete_lesson') _confirmDeleteLesson();
+            },
+            itemBuilder: (ctx) => [
+              PopupMenuItem<String>(
+                value: 'delete_lesson',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_forever_outlined, color: colorScheme.error, size: 22),
+                    const SizedBox(width: 12),
+                    Text('レッスンを削除', style: TextStyle(color: colorScheme.error)),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
