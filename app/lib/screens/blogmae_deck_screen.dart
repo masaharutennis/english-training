@@ -290,10 +290,11 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
                               label: Text('#${_current.id}'),
                               visualDensity: VisualDensity.compact,
                             ),
-                            Chip(
-                              label: Text(_current.grammar),
-                              visualDensity: VisualDensity.compact,
-                            ),
+                            if (_current.grammar.trim().isNotEmpty)
+                              Chip(
+                                label: Text(_current.grammar),
+                                visualDensity: VisualDensity.compact,
+                              ),
                           ],
                         ),
                         const SizedBox(height: 20),
