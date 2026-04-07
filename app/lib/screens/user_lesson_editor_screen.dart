@@ -3,7 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../models/blogmae_entry.dart';
+import '../services/composition_api_client.dart';
 import '../services/learning_items_loader.dart';
+import '../services/learning_progress_service.dart';
 import '../services/user_lessons_service.dart';
 import 'blogmae_deck_screen.dart';
 
@@ -189,6 +191,44 @@ class _UserLessonEditorScreenState extends State<UserLessonEditorScreen> {
     if (mounted) await _reload();
   }
 
+  Future<void> _confirmResetScores() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('スコアをリセット'),
+        content: Text(
+          '「${widget.title}」の全問題について、あなたの採点履歴を削除します。'
+          '教材一覧の平均や出題の重み付けが初期状態に戻ります。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('リセットする'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await LearningProgressService.resetScoresForCourseKey(widget.courseKey);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('スコアをリセットしました')),
+      );
+      await _reload();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('リセットに失敗: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _confirmDeleteLesson() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -259,9 +299,20 @@ class _UserLessonEditorScreenState extends State<UserLessonEditorScreen> {
             icon: const Icon(Icons.more_vert_rounded),
             tooltip: 'その他',
             onSelected: (value) {
+              if (value == 'reset_scores') _confirmResetScores();
               if (value == 'delete_lesson') _confirmDeleteLesson();
             },
             itemBuilder: (ctx) => [
+              const PopupMenuItem<String>(
+                value: 'reset_scores',
+                child: Row(
+                  children: [
+                    Icon(Icons.restart_alt_rounded, size: 22),
+                    SizedBox(width: 12),
+                    Text('スコアをリセット'),
+                  ],
+                ),
+              ),
               PopupMenuItem<String>(
                 value: 'delete_lesson',
                 child: Row(
@@ -431,6 +482,8 @@ class _LearningItemEditorDialogState extends State<_LearningItemEditorDialog> {
   late final TextEditingController _grammarCtrl;
   late final TextEditingController _englishCtrl;
   late final TextEditingController _japaneseCtrl;
+  bool _suggestingEn = false;
+  bool _suggestingJa = false;
 
   @override
   void initState() {
@@ -449,6 +502,76 @@ class _LearningItemEditorDialogState extends State<_LearningItemEditorDialog> {
   }
 
   bool get _isEdit => widget.existing != null;
+
+  bool get _aiBusy => _suggestingEn || _suggestingJa;
+
+  Future<void> _suggestEnglishFromJapanese() async {
+    final jp = _japaneseCtrl.text.trim();
+    if (jp.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('先に日本語（お題）を入力してください')),
+      );
+      return;
+    }
+    setState(() => _suggestingEn = true);
+    try {
+      final text = await CompositionApiClient().suggestDrillLine(
+        direction: 'ja_to_en',
+        grammar: _grammarCtrl.text,
+        sourceText: jp,
+      );
+      if (!mounted) return;
+      _englishCtrl.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+    } on CompositionApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _suggestingEn = false);
+    }
+  }
+
+  Future<void> _suggestJapaneseFromEnglish() async {
+    final en = _englishCtrl.text.trim();
+    if (en.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('先に英語（正解）を入力してください')),
+      );
+      return;
+    }
+    setState(() => _suggestingJa = true);
+    try {
+      final text = await CompositionApiClient().suggestDrillLine(
+        direction: 'en_to_ja',
+        grammar: _grammarCtrl.text,
+        sourceText: en,
+      );
+      if (!mounted) return;
+      _japaneseCtrl.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+    } on CompositionApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _suggestingJa = false);
+    }
+  }
 
   void _onSave() {
     if (_englishCtrl.text.trim().isEmpty || _japaneseCtrl.text.trim().isEmpty) {
@@ -506,26 +629,74 @@ class _LearningItemEditorDialogState extends State<_LearningItemEditorDialog> {
                     TextField(
                       controller: _grammarCtrl,
                       decoration: const InputDecoration(
-                        labelText: '文法タグ（任意・例: 過去形）',
+                        labelText: '文法タグ（任意・AIのヒントに使われます）',
                         border: OutlineInputBorder(),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
+                    Text(
+                      '日本語（お題）',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        icon: _suggestingJa
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.auto_awesome_outlined, size: 18),
+                        label: const Text('英語からお題を生成'),
+                        onPressed: _aiBusy ? null : _suggestJapaneseFromEnglish,
+                      ),
+                    ),
                     TextField(
-                      controller: _englishCtrl,
+                      controller: _japaneseCtrl,
                       decoration: const InputDecoration(
-                        labelText: '英語（正解）',
+                        hintText: '学習者に見せる日本語',
                         alignLabelWithHint: true,
                         border: OutlineInputBorder(),
                       ),
                       minLines: 4,
                       maxLines: 10,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
+                    Text(
+                      '英語（正解）',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        icon: _suggestingEn
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.auto_awesome_outlined, size: 18),
+                        label: const Text('日本語から英語を生成'),
+                        onPressed: _aiBusy ? null : _suggestEnglishFromJapanese,
+                      ),
+                    ),
                     TextField(
-                      controller: _japaneseCtrl,
+                      controller: _englishCtrl,
                       decoration: const InputDecoration(
-                        labelText: '日本語（お題）',
+                        hintText: '模範となる英文',
                         alignLabelWithHint: true,
                         border: OutlineInputBorder(),
                       ),
@@ -547,7 +718,7 @@ class _LearningItemEditorDialogState extends State<_LearningItemEditorDialog> {
                       child: const Text('キャンセル'),
                     ),
                     FilledButton(
-                      onPressed: _onSave,
+                      onPressed: _aiBusy ? null : _onSave,
                       child: Text(_isEdit ? '保存' : '追加'),
                     ),
                   ],

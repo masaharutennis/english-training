@@ -63,6 +63,19 @@ class EvaluateSpeechOut(BaseModel):
     advice: str
 
 
+class DrillSuggestRequest(BaseModel):
+    direction: str = Field(
+        ...,
+        description="ja_to_en: 日本語お題から英文を生成 / en_to_ja: 英文から日本語お題を生成",
+    )
+    grammar: str = Field("", description="任意の文法タグ（ヒント）")
+    source_text: str = Field(..., min_length=1, description="変換元のテキスト")
+
+
+class DrillSuggestOut(BaseModel):
+    text: str
+
+
 @app.get("/")
 async def root():
     return {"ok": True, "service": "composition-api"}
@@ -346,3 +359,118 @@ async def evaluate_speech(body: CorrectRequest) -> EvaluateSpeechOut:
         score=_score(data.get("score")),
         advice=str(data.get("advice", "")),
     )
+
+
+def _build_drill_suggest_prompt(*, direction: str, grammar: str, source_text: str) -> str:
+    g = grammar.strip() or "（指定なし）"
+    if direction == "ja_to_en":
+        return "\n".join(
+            [
+                "あなたは瞬間英作文の教材作成を手伝います。",
+                "学習者が日本語の意味を英語で言う問題用に、模範となる英文を1つだけ返してください。",
+                "口語・会話調でも文語でも、日本語の意味に忠実で自然な英語にしてください。",
+                "文法タグがあれば、その範囲の表現を優先してください（無理に合わせない）。",
+                "",
+                "【文法タグ（任意）】",
+                g,
+                "",
+                "【お題（日本語）】",
+                source_text.strip(),
+                "",
+                'JSONのみ返す: {"text": "<英文のみ。説明や引用符は不要>"}',
+            ]
+        )
+    if direction == "en_to_ja":
+        return "\n".join(
+            [
+                "あなたは瞬間英作文の教材作成を手伝います。",
+                "与えられた英文を、学習者にお題として見せる自然な日本語（1文〜短い文）にしてください。",
+                "意味が伝わる教科書調の日本語にしてください。",
+                "",
+                "【文法タグ（任意）】",
+                g,
+                "",
+                "【模範英文】",
+                source_text.strip(),
+                "",
+                'JSONのみ返す: {"text": "<日本語のお題のみ。説明不要>"}',
+            ]
+        )
+    raise ValueError(f"invalid direction: {direction}")
+
+
+@app.post("/v1/composition/suggest_drill_line", response_model=DrillSuggestOut)
+async def suggest_drill_line(body: DrillSuggestRequest) -> DrillSuggestOut:
+    """問題登録用: 日本語→英文、または英文→日本語お題を ChatGPT で提案。"""
+    if body.direction not in ("ja_to_en", "en_to_ja"):
+        raise HTTPException(status_code=400, detail="direction は ja_to_en か en_to_ja のみです")
+
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="OPENAI_API_KEY がサーバー環境変数に設定されていません。",
+        )
+
+    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
+    base = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1").rstrip("/")
+    url = f"{base}/chat/completions"
+
+    system = (
+        "You help author English drill items for Japanese learners (瞬間英作文). "
+        "Always respond with a single JSON object only, no markdown, with key \"text\" only."
+    )
+    user_prompt = _build_drill_suggest_prompt(
+        direction=body.direction,
+        grammar=body.grammar,
+        source_text=body.source_text,
+    )
+
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_prompt},
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.35,
+        "max_tokens": 600,
+    }
+
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        r = await client.post(
+            url,
+            json=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            },
+        )
+
+    if r.status_code < 200 or r.status_code >= 300:
+        snippet = r.text[:300] + ("…" if len(r.text) > 300 else "")
+        raise HTTPException(
+            status_code=502,
+            detail=f"OpenAI API エラー ({r.status_code}): {snippet}",
+        )
+
+    try:
+        outer = r.json()
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=502, detail=f"OpenAI 応答が JSON ではありません: {e}") from e
+
+    choices = outer.get("choices") or []
+    if not choices:
+        raise HTTPException(status_code=502, detail="OpenAI 応答に choices がありません")
+
+    msg = (choices[0] or {}).get("message") or {}
+    content = msg.get("content")
+    if not content:
+        raise HTTPException(status_code=502, detail="OpenAI から空の content が返りました")
+
+    data = _parse_correction_content(content)
+    text = str(data.get("text", "")).strip()
+    if not text:
+        raise HTTPException(status_code=502, detail="提案テキストが空でした")
+
+    return DrillSuggestOut(text=text)

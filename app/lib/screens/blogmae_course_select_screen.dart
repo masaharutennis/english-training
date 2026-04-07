@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/lesson_list_row.dart';
 import '../services/learning_items_loader.dart';
+import '../services/learning_progress_service.dart';
 import '../services/user_lessons_service.dart';
 import '../widgets/score_donut.dart';
 import '../utils/env_config.dart';
@@ -118,6 +119,44 @@ class _BlogmaeCourseSelectScreenState extends State<BlogmaeCourseSelectScreen> {
     await _openSystemOrPublicDeck(row.title, row.courseKey);
   }
 
+  Future<void> _confirmResetScores(LessonListRow row) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('スコアをリセット'),
+        content: Text(
+          '「${row.title}」の全問題について、あなたの採点履歴を削除します。'
+          '平均スコアや出題の重み付けが初期状態に戻ります。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('リセットする'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await LearningProgressService.resetScoresForCourseKey(row.courseKey);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('スコアをリセットしました')),
+      );
+      await _refresh();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('リセットに失敗: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -224,6 +263,8 @@ class _BlogmaeCourseSelectScreenState extends State<BlogmaeCourseSelectScreen> {
                             showDonut: showDonut,
                             averageScore: averages[row.courseKey] ?? 0,
                             trailingHint: row.isOwner ? Icons.edit_note_rounded : null,
+                            showScoreResetMenu: showDonut,
+                            onResetScores: () => _confirmResetScores(row),
                             onOpen: () async {
                               await _onLessonTap(row);
                             },
@@ -249,9 +290,11 @@ class _BlogmaeCourseSelectScreenState extends State<BlogmaeCourseSelectScreen> {
                               averageScore: averages[row.courseKey] ?? 0,
                               trailingHint:
                                   row.isOwner ? Icons.edit_note_rounded : null,
+                              showScoreResetMenu: showDonut,
+                              onResetScores: () => _confirmResetScores(row),
                               onOpen: () async {
-                              await _onLessonTap(row);
-                            },
+                                await _onLessonTap(row);
+                              },
                             ),
                           ),
                         ),
@@ -313,6 +356,8 @@ class _CourseTile extends StatelessWidget {
     required this.averageScore,
     required this.onOpen,
     this.trailingHint,
+    this.showScoreResetMenu = false,
+    this.onResetScores,
   });
 
   final String title;
@@ -321,6 +366,8 @@ class _CourseTile extends StatelessWidget {
   final double averageScore;
   final Future<void> Function() onOpen;
   final IconData? trailingHint;
+  final bool showScoreResetMenu;
+  final Future<void> Function()? onResetScores;
 
   @override
   Widget build(BuildContext context) {
@@ -343,6 +390,23 @@ class _CourseTile extends StatelessWidget {
               ScoreDonut(score: averageScore),
               const SizedBox(width: 4),
             ],
+            if (showScoreResetMenu && onResetScores != null)
+              PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert_rounded, color: colorScheme.outline),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                onSelected: (value) {
+                  if (value == 'reset_scores') {
+                    onResetScores!();
+                  }
+                },
+                itemBuilder: (ctx) => const [
+                  PopupMenuItem<String>(
+                    value: 'reset_scores',
+                    child: Text('スコアをリセット'),
+                  ),
+                ],
+              ),
             Icon(Icons.chevron_right_rounded, color: colorScheme.primary),
           ],
         ),
