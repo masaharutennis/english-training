@@ -11,4 +11,5 @@ flutter pub get
 flutter build web --release --wasm -O4 \
   --dart-define="CORRECTION_API_BASE_URL=${CORRECTION_API_BASE_URL:-}" \
   --dart-define="SUPABASE_URL=${SUPABASE_URL:-}" \
-  --dart-define="SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}"
+  --dart-define="SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}" \
+  --dart-define="SPEECH_USE_WHISPER=${SPEECH_USE_WHISPER:-false}"
