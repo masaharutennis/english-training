@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../config/speech_evaluation_config.dart';
-import '../models/blogmae_entry.dart';
+import '../models/learning_entry.dart';
 import '../models/speech_evaluation_result.dart';
 import '../services/composition_api_client.dart';
 import '../services/learning_progress_service.dart';
@@ -15,7 +15,7 @@ class SpeechEvaluationScreen extends StatefulWidget {
     required this.userTranscript,
   });
 
-  final BlogmaeEntry entry;
+  final LearningEntry entry;
   final String userTranscript;
 
   @override

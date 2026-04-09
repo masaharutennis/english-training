@@ -29,6 +29,7 @@
 
 - 対象: **Flutter Web**（マイク・STT は **Chrome 推奨**、`localhost` / HTTPS）
 - 評価 API: `POST /v1/composition/evaluate_speech`（`api/main.py`）
+- 任意の書き起こし: `POST /v1/speech/transcribe`（OpenAI Whisper、`SPEECH_USE_WHISPER` 時）
 - OpenAI キーは **サーバー環境変数のみ**；Flutter は `CORRECTION_API_BASE_URL` と Supabase の `SUPABASE_URL` / `SUPABASE_ANON_KEY`（`api/README.md`）
 - データ: Supabase（Postgres）／シード再生成元は `tools/scraping/output/*.csv`
 
@@ -98,8 +99,8 @@ api/main.py
 app/lib/screens/
   home_screen.dart
   auth_screen.dart
-  blogmae_course_select_screen.dart
-  blogmae_deck_screen.dart
+  course_select_screen.dart
+  training_deck_screen.dart
   speech_evaluation_screen.dart
 app/lib/services/
   composition_api_client.dart
@@ -107,7 +108,7 @@ app/lib/services/
   learning_progress_service.dart
   quiz_picker.dart
 app/lib/models/
-  blogmae_entry.dart
+  learning_entry.dart
   speech_evaluation_result.dart
 ```
 

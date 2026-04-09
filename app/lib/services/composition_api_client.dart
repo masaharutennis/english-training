@@ -1,8 +1,9 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 
-import '../models/blogmae_entry.dart';
+import '../models/learning_entry.dart';
 import '../models/speech_evaluation_result.dart';
 import '../utils/env_config.dart';
 
@@ -16,8 +17,57 @@ class CompositionApiException implements Exception {
 
 /// 自前 API（`api/main.py`）へだけ HTTP する。
 class CompositionApiClient {
+  /// OpenAI Whisper 経由の書き起こし（`POST /v1/speech/transcribe`）。
+  Future<String> transcribeSpeech({
+    required List<int> audioBytes,
+    required String filename,
+  }) async {
+    if (!EnvConfig.hasCorrectionApiBaseUrl) {
+      throw CompositionApiException(
+        'CORRECTION_API_BASE_URL が設定されていません。app/.env.example を参照し、'
+        '--dart-define-from-file=.env で起動してください。',
+      );
+    }
+
+    final base = EnvConfig.correctionApiBaseUrlResolved;
+    final url = Uri.parse('$base/v1/speech/transcribe');
+    final req = http.MultipartRequest('POST', url)
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          'audio',
+          audioBytes,
+          filename: filename,
+        ),
+      );
+
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      var msg = res.body;
+      try {
+        final err = jsonDecode(res.body);
+        if (err is Map && err['detail'] != null) {
+          msg = err['detail'].toString();
+        }
+      } catch (_) {}
+      final snippet = msg.length > 280 ? '${msg.substring(0, 280)}…' : msg;
+      throw CompositionApiException('API エラー (${res.statusCode}): $snippet');
+    }
+
+    try {
+      final map = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      return map['transcript']?.toString() ?? '';
+    } catch (e) {
+      throw CompositionApiException('レスポンスの解析に失敗: $e');
+    }
+  }
+
+  /// Web は WebM、ネイティブは FLAC（Whisper が受理しやすい形式）。
+  static String whisperRecordingFilename() => kIsWeb ? 'speech.webm' : 'speech.flac';
+
   Future<SpeechEvaluationResult> evaluateSpeech({
-    required BlogmaeEntry entry,
+    required LearningEntry entry,
     required String userEnglish,
   }) async {
     if (!EnvConfig.hasCorrectionApiBaseUrl) {

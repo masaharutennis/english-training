@@ -2,12 +2,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../models/blogmae_entry.dart';
+import '../models/learning_entry.dart';
 import '../services/composition_api_client.dart';
 import '../services/learning_items_loader.dart';
 import '../services/learning_progress_service.dart';
 import '../services/user_lessons_service.dart';
-import 'blogmae_deck_screen.dart';
+import 'training_deck_screen.dart';
 
 /// 自分のユーザーレッスンに問題を追加し、練習に進む。
 class UserLessonEditorScreen extends StatefulWidget {
@@ -25,7 +25,7 @@ class UserLessonEditorScreen extends StatefulWidget {
 }
 
 class _UserLessonEditorScreenState extends State<UserLessonEditorScreen> {
-  late Future<List<BlogmaeEntry>> _itemsFuture;
+  late Future<List<LearningEntry>> _itemsFuture;
   String? _visibility;
   bool _visibilityLoading = true;
 
@@ -90,11 +90,11 @@ class _UserLessonEditorScreenState extends State<UserLessonEditorScreen> {
     await _showItemEditorDialog();
   }
 
-  Future<void> _showEditItemDialog(BlogmaeEntry entry) async {
+  Future<void> _showEditItemDialog(LearningEntry entry) async {
     await _showItemEditorDialog(existing: entry);
   }
 
-  Future<void> _showItemEditorDialog({BlogmaeEntry? existing}) async {
+  Future<void> _showItemEditorDialog({LearningEntry? existing}) async {
     final isEdit = existing != null;
     final fields = await showDialog<_LearningItemFields>(
       context: context,
@@ -133,7 +133,7 @@ class _UserLessonEditorScreenState extends State<UserLessonEditorScreen> {
     }
   }
 
-  Future<void> _confirmDeleteItem(BlogmaeEntry entry) async {
+  Future<void> _confirmDeleteItem(LearningEntry entry) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -173,7 +173,7 @@ class _UserLessonEditorScreenState extends State<UserLessonEditorScreen> {
     }
   }
 
-  String _subtitleLine(BlogmaeEntry e) {
+  String _subtitleLine(LearningEntry e) {
     final g = e.grammar.trim();
     if (g.isEmpty) return e.english;
     return '$g · ${e.english}';
@@ -182,7 +182,7 @@ class _UserLessonEditorScreenState extends State<UserLessonEditorScreen> {
   Future<void> _openPractice() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => BlogmaeDeckFlowScreen(
+        builder: (_) => TrainingDeckFlowScreen(
           courseKey: widget.courseKey,
           courseTitle: widget.title,
         ),
@@ -366,7 +366,7 @@ class _UserLessonEditorScreenState extends State<UserLessonEditorScreen> {
               ),
             ),
           Expanded(
-            child: FutureBuilder<List<BlogmaeEntry>>(
+            child: FutureBuilder<List<LearningEntry>>(
               future: _itemsFuture,
               builder: (context, snap) {
                 if (snap.connectionState != ConnectionState.done) {
@@ -472,7 +472,7 @@ class _LearningItemFields {
 class _LearningItemEditorDialog extends StatefulWidget {
   const _LearningItemEditorDialog({this.existing});
 
-  final BlogmaeEntry? existing;
+  final LearningEntry? existing;
 
   @override
   State<_LearningItemEditorDialog> createState() => _LearningItemEditorDialogState();

@@ -37,6 +37,9 @@ dependencies:
   http: ^1.2.2
   supabase_flutter: ^2.8.4
   speech_to_text: ^7.3.0
+  record: ^5.2.1
+  path_provider: ^2.1.5
+  cross_file: ^0.3.4+2
   google_fonts: ^8.0.2
 
 dev_dependencies:

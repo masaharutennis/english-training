@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../utils/env_config.dart';
 import 'auth_screen.dart';
-import 'blogmae_course_select_screen.dart';
+import 'course_select_screen.dart';
 
 /// ランディング。Supabase 利用時はログイン後に学習へ。
 class HomeScreen extends StatelessWidget {
@@ -55,7 +55,7 @@ class _LoggedOutHomeBody extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'BlogMAE 教材',
+                '瞬間英作文ドリル',
                 textAlign: TextAlign.center,
                 style: textTheme.titleLarge?.copyWith(
                   color: colorScheme.primary,
@@ -128,7 +128,7 @@ class _LoggedInHomeBody extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'BlogMAE 教材',
+                '瞬間英作文ドリル',
                 textAlign: TextAlign.center,
                 style: textTheme.titleLarge?.copyWith(
                   color: colorScheme.primary,
@@ -159,7 +159,7 @@ class _LoggedInHomeBody extends StatelessWidget {
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(
-                      builder: (_) => const BlogmaeCourseSelectScreen(),
+                      builder: (_) => const CourseSelectScreen(),
                     ),
                   );
                 },
@@ -218,7 +218,7 @@ class _GuestHomeBody extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'BlogMAE 教材',
+                '瞬間英作文ドリル',
                 textAlign: TextAlign.center,
                 style: textTheme.titleLarge?.copyWith(
                   color: colorScheme.primary,
@@ -239,7 +239,7 @@ class _GuestHomeBody extends StatelessWidget {
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(
-                      builder: (_) => const BlogmaeCourseSelectScreen(),
+                      builder: (_) => const CourseSelectScreen(),
                     ),
                   );
                 },

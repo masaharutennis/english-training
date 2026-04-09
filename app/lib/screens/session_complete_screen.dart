@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'blogmae_course_select_screen.dart';
+import 'course_select_screen.dart';
 
 /// 10 問セッション終了後。今回の平均を表示し、レッスン一覧へ。
 class SessionCompleteScreen extends StatelessWidget {
@@ -16,7 +16,7 @@ class SessionCompleteScreen extends StatelessWidget {
   void _goToCourseList(BuildContext context) {
     Navigator.of(context).pushAndRemoveUntil<void>(
       MaterialPageRoute<void>(
-        builder: (_) => const BlogmaeCourseSelectScreen(),
+        builder: (_) => const CourseSelectScreen(),
       ),
       (route) => route.isFirst,
     );

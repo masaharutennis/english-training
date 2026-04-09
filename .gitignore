@@ -34,3 +34,6 @@ supabase/.temp/
 
 # スクレイパー仮想環境（tools 直下）
 tools/.venv/
+
+# ローカル用サービスアカウント JSON（誤コミット防止）
+api/gcp-sa*.json

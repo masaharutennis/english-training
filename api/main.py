@@ -11,7 +11,7 @@ import re
 from typing import Any
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -74,6 +74,10 @@ class DrillSuggestRequest(BaseModel):
 
 class DrillSuggestOut(BaseModel):
     text: str
+
+
+class TranscribeOut(BaseModel):
+    transcript: str
 
 
 @app.get("/")
@@ -474,3 +478,52 @@ async def suggest_drill_line(body: DrillSuggestRequest) -> DrillSuggestOut:
         raise HTTPException(status_code=502, detail="提案テキストが空でした")
 
     return DrillSuggestOut(text=text)
+
+
+@app.post("/v1/speech/transcribe", response_model=TranscribeOut)
+async def transcribe_speech(
+    audio: UploadFile = File(..., description="発話（webm / flac / m4a / wav 等。OpenAI Whisper 対応形式）"),
+) -> TranscribeOut:
+    """録音データを OpenAI Whisper で英語に書き起こす（サーバーに OPENAI_API_KEY のみ）。"""
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="OPENAI_API_KEY がサーバー環境変数に設定されていません。",
+        )
+
+    content = await audio.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="音声データが空です")
+
+    filename = (audio.filename or "audio.webm").strip() or "audio.webm"
+    ct = (audio.content_type or "application/octet-stream").strip() or "application/octet-stream"
+    model = os.getenv("OPENAI_WHISPER_MODEL", "whisper-1").strip() or "whisper-1"
+    base = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1").rstrip("/")
+    url = f"{base}/audio/transcriptions"
+
+    files = {"file": (filename, content, ct)}
+    data = {"model": model, "language": "en", "response_format": "json"}
+
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        r = await client.post(
+            url,
+            headers={"Authorization": f"Bearer {api_key}"},
+            files=files,
+            data=data,
+        )
+
+    if r.status_code < 200 or r.status_code >= 300:
+        snippet = r.text[:300] + ("…" if len(r.text) > 300 else "")
+        raise HTTPException(
+            status_code=502,
+            detail=f"OpenAI Whisper エラー ({r.status_code}): {snippet}",
+        )
+
+    try:
+        outer = r.json()
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=502, detail=f"Whisper 応答が JSON ではありません: {e}") from e
+
+    transcript = str(outer.get("text", "")).strip()
+    return TranscribeOut(transcript=transcript)

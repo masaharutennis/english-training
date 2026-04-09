@@ -56,7 +56,7 @@ Root Directory を **`api`** にしたとき、エントリは **`pyproject.toml
    | `OPENAI_API_KEY` | OpenAI のシークレットキー |
    | `ALLOWED_ORIGINS` | デプロイした Flutter Web のオリジン（例: `https://your-app.web.app`）。複数はカンマ区切り。**本番では `*` にしない。** |
 
-   任意: `OPENAI_MODEL`（既定 `gpt-4o-mini`）、`OPENAI_API_BASE`。  
+   任意: `OPENAI_MODEL`（既定 `gpt-4o-mini`）、`OPENAI_API_BASE`、`OPENAI_WHISPER_MODEL`（既定 `whisper-1`、`POST /v1/speech/transcribe` 用）。  
    発話評価 `evaluate_speech` だけ別モデルにする場合は **`OPENAI_EVAL_SPEECH_MODEL`**（未設定時は `OPENAI_MODEL` と同じ）。
 
 ### モデル選び（レイテンシ）
@@ -82,4 +82,5 @@ Root Directory を **`api`** にしたとき、エントリは **`pyproject.toml
 
 - `GET /` … ヘルスチェック
 - `POST /v1/composition/evaluate_speech` … 発話認識テキストの簡易評価 `{ grammar, japanese, english, user_english }` → `{ score, advice }`
+- `POST /v1/speech/transcribe` … 音声ファイル（multipart `audio`）→ OpenAI Whisper → `{ transcript }`（`OPENAI_API_KEY` 共通）
 - `POST /v1/composition/correct` … 従来の全文添削（未使用なら省略可）

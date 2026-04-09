@@ -1,6 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../models/blogmae_entry.dart';
+import '../models/learning_entry.dart';
 import '../utils/env_config.dart';
 import 'quiz_picker.dart';
 
@@ -17,11 +17,11 @@ class LearningItemsLoader {
   /// 1 セッションあたりの出題数。
   static const int quizSize = 10;
 
-  static Future<List<BlogmaeEntry>> loadForCourse(String courseKey) =>
+  static Future<List<LearningEntry>> loadForCourse(String courseKey) =>
       loadQuizForCourse(courseKey);
 
   /// コース内の全問を取得（`item_number` 昇順）。
-  static Future<List<BlogmaeEntry>> loadAllForCourse(String courseKey) async {
+  static Future<List<LearningEntry>> loadAllForCourse(String courseKey) async {
     _ensureSupabase();
     final rows = await Supabase.instance.client
         .from('lessons')
@@ -48,7 +48,7 @@ class LearningItemsLoader {
   }
 
   /// 低スコアほど出やすい重み付きで最大 [quizSize] 問。
-  static Future<List<BlogmaeEntry>> loadQuizForCourse(String courseKey) async {
+  static Future<List<LearningEntry>> loadQuizForCourse(String courseKey) async {
     final all = await loadAllForCourse(courseKey);
     if (all.isEmpty) return [];
     final ids = all.map((e) => e.learningItemId).toSet();
@@ -77,12 +77,12 @@ class LearningItemsLoader {
     }
   }
 
-  static BlogmaeEntry _rowToEntry(Map<String, dynamic> m) {
+  static LearningEntry _rowToEntry(Map<String, dynamic> m) {
     final idRaw = m['id'];
     final learningItemId = idRaw is int ? idRaw : (idRaw as num).toInt();
     final n = m['item_number'];
     final itemNumber = n is int ? n : (n as num).toInt();
-    return BlogmaeEntry(
+    return LearningEntry(
       learningItemId: learningItemId,
       id: itemNumber,
       grammar: (m['grammar'] ?? '').toString(),

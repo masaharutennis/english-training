@@ -10,6 +10,13 @@ class EnvConfig {
     'CORRECTION_API_BASE_URL',
   );
 
+  /// `true` のときマイクはブラウザ STT ではなく、録音 → 自前 API → OpenAI Whisper。
+  /// サーバーに `OPENAI_API_KEY`（既存の添削用と共通）が必要。`CORRECTION_API_BASE_URL` も必須。
+  static const bool speechUseWhisper = bool.fromEnvironment(
+    'SPEECH_USE_WHISPER',
+    defaultValue: false,
+  );
+
   static const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
   static const String supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 

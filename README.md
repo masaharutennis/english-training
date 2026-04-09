@@ -8,7 +8,7 @@
 |-------------|------|
 | [`app/`](app/) | Flutter Web（Supabase 教材・STT・評価画面） |
 | [`api/`](api/) | FastAPI … `POST /v1/composition/evaluate_speech` など |
-| [`tools/scraping/`](tools/scraping/) | BlogMAE 記事から CSV を生成するスクレイパー |
+| [`tools/scraping/`](tools/scraping/) | 教材元サイトから CSV を生成するスクレイパー |
 | [`docs/`](docs/) | 仕様メモ |
 
 ## ローカル開発（概要）
@@ -41,4 +41,4 @@
 
 ## ライセンス・教材
 
-教材データは BlogMAE 系の元データを Supabase に保持しています（生成は [`tools/`](tools/) など）。サイトの利用条件に従ってください。
+教材データは元サイト由来の CSV を Supabase に保持しています（生成は [`tools/`](tools/) など）。サイトの利用条件に従ってください。

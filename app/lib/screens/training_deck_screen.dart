@@ -1,16 +1,21 @@
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
-import '../models/blogmae_entry.dart';
+import '../models/learning_entry.dart';
+import '../services/composition_api_client.dart';
 import '../services/learning_items_loader.dart';
+import '../utils/env_config.dart';
 import '../widgets/slide_page_route.dart';
 import 'session_complete_screen.dart';
 import 'speech_evaluation_screen.dart';
 
 /// Supabase の問題を順にカード表示。英語の入力または発話 STT → 解答確認。
-class BlogmaeDeckFlowScreen extends StatefulWidget {
-  const BlogmaeDeckFlowScreen({
+class TrainingDeckFlowScreen extends StatefulWidget {
+  const TrainingDeckFlowScreen({
     super.key,
     required this.courseKey,
     required this.courseTitle,
@@ -20,11 +25,11 @@ class BlogmaeDeckFlowScreen extends StatefulWidget {
   final String courseTitle;
 
   @override
-  State<BlogmaeDeckFlowScreen> createState() => _BlogmaeDeckFlowScreenState();
+  State<TrainingDeckFlowScreen> createState() => _TrainingDeckFlowScreenState();
 }
 
-class _BlogmaeDeckFlowScreenState extends State<BlogmaeDeckFlowScreen> {
-  late Future<List<BlogmaeEntry>> _future;
+class _TrainingDeckFlowScreenState extends State<TrainingDeckFlowScreen> {
+  late Future<List<LearningEntry>> _future;
 
   @override
   void initState() {
@@ -34,7 +39,7 @@ class _BlogmaeDeckFlowScreenState extends State<BlogmaeDeckFlowScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<BlogmaeEntry>>(
+    return FutureBuilder<List<LearningEntry>>(
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
@@ -61,7 +66,7 @@ class _BlogmaeDeckFlowScreenState extends State<BlogmaeDeckFlowScreen> {
             body: const Center(child: Text('問題がありません')),
           );
         }
-        return BlogmaeDeckScreen(
+        return TrainingDeckScreen(
           entries: items,
           courseTitle: widget.courseTitle,
           quizHint: '${items.length}問（苦手優先のランダム）',
@@ -71,8 +76,8 @@ class _BlogmaeDeckFlowScreenState extends State<BlogmaeDeckFlowScreen> {
   }
 }
 
-class BlogmaeDeckScreen extends StatefulWidget {
-  const BlogmaeDeckScreen({
+class TrainingDeckScreen extends StatefulWidget {
+  const TrainingDeckScreen({
     super.key,
     required this.entries,
     required this.courseTitle,
@@ -80,17 +85,19 @@ class BlogmaeDeckScreen extends StatefulWidget {
     this.quizHint,
   });
 
-  final List<BlogmaeEntry> entries;
+  final List<LearningEntry> entries;
   final String courseTitle;
   final int initialIndex;
   final String? quizHint;
 
   @override
-  State<BlogmaeDeckScreen> createState() => _BlogmaeDeckScreenState();
+  State<TrainingDeckScreen> createState() => _TrainingDeckScreenState();
 }
 
-class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
+class _TrainingDeckScreenState extends State<TrainingDeckScreen> {
   final stt.SpeechToText _speech = stt.SpeechToText();
+  AudioRecorder? _audioRecorder;
+  final CompositionApiClient _composition = CompositionApiClient();
   /// 発話 STT もキーボード入力も同じフィールドに入れる（部分認識は controller 更新のみで再描画が局所的）。
   final TextEditingController _answerController = TextEditingController();
   final List<int> _sessionScores = <int>[];
@@ -98,19 +105,26 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
   bool _speechReady = false;
   String? _speechError;
   bool _listening = false;
+  bool _transcribing = false;
 
-  BlogmaeEntry get _current => widget.entries[_index];
+  LearningEntry get _current => widget.entries[_index];
 
   @override
   void initState() {
     super.initState();
     final maxI = widget.entries.isEmpty ? 0 : widget.entries.length - 1;
     _index = widget.initialIndex.clamp(0, maxI);
-    _initSpeech();
+    if (EnvConfig.speechUseWhisper) {
+      _audioRecorder = AudioRecorder();
+      _initWhisperRecording();
+    } else {
+      _initSpeech();
+    }
   }
 
   @override
   void dispose() {
+    _audioRecorder?.dispose();
     _answerController.dispose();
     super.dispose();
   }
@@ -138,7 +152,85 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
     }
   }
 
+  Future<void> _initWhisperRecording() async {
+    if (_audioRecorder == null) return;
+    if (!EnvConfig.hasCorrectionApiBaseUrl) {
+      if (mounted) {
+        setState(() {
+          _speechReady = false;
+          _speechError = 'Whisper 書き起こしには CORRECTION_API_BASE_URL が必要です';
+        });
+      }
+      return;
+    }
+    final ok = await _audioRecorder!.hasPermission();
+    if (mounted) {
+      setState(() {
+        _speechReady = ok;
+        if (!ok) {
+          _speechError ??= 'マイクの許可が必要です（ブラウザ・端末設定を確認）';
+        }
+      });
+    }
+  }
+
+  Future<void> _stopWhisperAndTranscribe() async {
+    if (_audioRecorder == null) return;
+    final path = await _audioRecorder!.stop();
+    if (!mounted) return;
+    setState(() => _listening = false);
+    if (path == null || path.isEmpty) {
+      return;
+    }
+    setState(() {
+      _transcribing = true;
+      _speechError = null;
+    });
+    try {
+      final fn = CompositionApiClient.whisperRecordingFilename();
+      final bytes = await XFile(path).readAsBytes();
+      final text = await _composition.transcribeSpeech(
+        audioBytes: bytes,
+        filename: fn,
+      );
+      if (!mounted) return;
+      final t = text.trim();
+      _answerController.value = TextEditingValue(
+        text: t,
+        selection: TextSelection.collapsed(offset: t.length),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _speechError = e is CompositionApiException ? e.message : '$e';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _transcribing = false);
+    }
+  }
+
   Future<void> _toggleMic() async {
+    if (EnvConfig.speechUseWhisper) {
+      if (!_speechReady || _transcribing) return;
+      if (_listening) {
+        await _stopWhisperAndTranscribe();
+        return;
+      }
+      setState(() => _speechError = null);
+      _answerController.clear();
+      final cfg = RecordConfig(
+        encoder: kIsWeb ? AudioEncoder.opus : AudioEncoder.flac,
+        sampleRate: kIsWeb ? 48000 : 44100,
+      );
+      final path = kIsWeb
+          ? ''
+          : '${(await getTemporaryDirectory()).path}/stt_${DateTime.now().millisecondsSinceEpoch}.flac';
+      await _audioRecorder!.start(cfg, path: path);
+      if (mounted) setState(() => _listening = true);
+      return;
+    }
+
     if (!_speechReady) return;
     if (_listening) {
       await _speech.stop();
@@ -171,7 +263,9 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
   }
 
   Future<void> _confirmAnswer() async {
-    if (_listening) {
+    if (EnvConfig.speechUseWhisper && _listening) {
+      await _stopWhisperAndTranscribe();
+    } else if (_listening) {
       await _speech.stop();
     }
     if (!mounted) return;
@@ -327,6 +421,30 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
                         style: TextStyle(color: colorScheme.error, fontSize: 12),
                       ),
                     ),
+                  if (_transcribing)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: colorScheme.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '音声を認識しています…',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
                   DecoratedBox(
                     decoration: BoxDecoration(
                       color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
@@ -364,7 +482,7 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
                         shape: const CircleBorder(),
                         clipBehavior: Clip.antiAlias,
                         child: InkWell(
-                          onTap: _speechReady ? _toggleMic : null,
+                          onTap: (_speechReady && !_transcribing) ? _toggleMic : null,
                           child: SizedBox(
                             width: 72,
                             height: 72,
@@ -382,14 +500,16 @@ class _BlogmaeDeckScreenState extends State<BlogmaeDeckScreen> {
                   ),
                   const SizedBox(height: 12),
                   FilledButton(
-                    onPressed: _confirmAnswer,
+                    onPressed: _transcribing ? null : _confirmAnswer,
                     child: const Text('解答を確認'),
                   ),
                   if (kIsWeb)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
-                        '音声を使う場合は Chrome 推奨・マイクの許可が必要です。入力のみでも解答できます。',
+                        EnvConfig.speechUseWhisper
+                            ? '音声はサーバー経由（OpenAI Whisper）で英語に書き起こします。Chrome 推奨・マイク許可が必要です。'
+                            : '音声を使う場合は Chrome 推奨・マイクの許可が必要です。入力のみでも解答できます。',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: colorScheme.outline,

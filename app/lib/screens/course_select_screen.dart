@@ -8,16 +8,16 @@ import '../services/user_lessons_service.dart';
 import '../widgets/score_donut.dart';
 import '../utils/env_config.dart';
 import 'auth_screen.dart';
-import 'blogmae_deck_screen.dart';
+import 'training_deck_screen.dart';
 import 'user_lesson_create_screen.dart';
 import 'user_lesson_editor_screen.dart';
 
-/// 学習開始後、教材を選ぶ（公式 BlogMAE + ユーザーレッスン）。
-class BlogmaeCourseSelectScreen extends StatefulWidget {
-  const BlogmaeCourseSelectScreen({super.key});
+/// 学習開始後、教材を選ぶ（公式コース + ユーザーレッスン）。
+class CourseSelectScreen extends StatefulWidget {
+  const CourseSelectScreen({super.key});
 
   @override
-  State<BlogmaeCourseSelectScreen> createState() => _BlogmaeCourseSelectScreenState();
+  State<CourseSelectScreen> createState() => _CourseSelectScreenState();
 }
 
 class _CourseSelectData {
@@ -30,7 +30,7 @@ class _CourseSelectData {
   final Map<String, double> averages;
 }
 
-class _BlogmaeCourseSelectScreenState extends State<BlogmaeCourseSelectScreen> {
+class _CourseSelectScreenState extends State<CourseSelectScreen> {
   late Future<_CourseSelectData> _dataFuture;
 
   static const Map<String, String> _systemSubtitles = {
@@ -86,7 +86,7 @@ class _BlogmaeCourseSelectScreenState extends State<BlogmaeCourseSelectScreen> {
   Future<void> _openSystemOrPublicDeck(String title, String courseKey) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => BlogmaeDeckFlowScreen(
+        builder: (_) => TrainingDeckFlowScreen(
           courseKey: courseKey,
           courseTitle: title,
         ),
@@ -235,7 +235,7 @@ class _BlogmaeCourseSelectScreenState extends State<BlogmaeCourseSelectScreen> {
                     ],
                     const SizedBox(height: 16),
                     Text(
-                      '公式（BlogMAE）',
+                      '公式コース',
                       style: textTheme.labelLarge?.copyWith(
                         color: colorScheme.primary,
                       ),

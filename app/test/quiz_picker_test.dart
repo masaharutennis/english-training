@@ -1,4 +1,4 @@
-import 'package:english_training/models/blogmae_entry.dart';
+import 'package:english_training/models/learning_entry.dart';
 import 'package:english_training/services/quiz_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -6,7 +6,7 @@ void main() {
   test('pickWeighted returns at most maxCount', () {
     final items = List.generate(
       20,
-      (i) => BlogmaeEntry(
+      (i) => LearningEntry(
         learningItemId: i + 1,
         id: i + 1,
         grammar: 'g',
@@ -22,7 +22,7 @@ void main() {
 
   test('pickWeighted returns all when fewer items than maxCount', () {
     final items = [
-      const BlogmaeEntry(
+      const LearningEntry(
         learningItemId: 1,
         id: 1,
         grammar: 'g',

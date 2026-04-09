@@ -1,13 +1,13 @@
 import 'dart:math';
 
-import '../models/blogmae_entry.dart';
+import '../models/learning_entry.dart';
 
 /// 直近スコアが低いほど選ばれやすい重み付き無作為抽出（最大 [maxCount] 問）。
 class QuizPicker {
   QuizPicker._();
 
-  static List<BlogmaeEntry> pickWeighted(
-    List<BlogmaeEntry> items,
+  static List<LearningEntry> pickWeighted(
+    List<LearningEntry> items,
     Map<int, int> lastScoreByLearningItemId,
     int maxCount,
   ) {
@@ -26,7 +26,7 @@ class QuizPicker {
         .toList();
     final remaining = List<int>.generate(items.length, (i) => i);
     final rng = Random();
-    final picked = <BlogmaeEntry>[];
+    final picked = <LearningEntry>[];
     for (var k = 0; k < maxCount && remaining.isNotEmpty; k++) {
       var total = 0;
       for (final i in remaining) {
